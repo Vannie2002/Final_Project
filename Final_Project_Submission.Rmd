@@ -1,0 +1,271 @@
+---
+title: "Final_Project_Submission"
+author: "Vannie Nguyen"
+date: "2025-10-16"
+output: pdf_document
+---
+```{r}
+# Load libraries
+library(ggplot2)
+library(dplyr)
+
+# Change the file path to the path for the data on my local machine
+file_path <- "/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/"
+
+# Read in count matrix and metadata
+counts <- read.csv(paste0(file_path, "counts.csv"), row.names=1)
+metadata <- read.csv(paste0(file_path, "meta_data.csv"), row.names=1)
+print(head(metadata))
+```
+```{r}
+# select gene
+gene1 <- "ENSG00000000419.13"
+
+# Extract counts for the gene
+gene1_counts <- as.numeric(counts[gene1, ])
+
+# Summary statistics
+summary(gene1_counts)
+mean(gene1_counts)
+median(gene1_counts)
+sd(gene1_counts)
+min(gene1_counts)
+max(gene1_counts)
+```
+```{r}
+# Histogram of gene 1
+gene1_df <- data.frame(Expression=gene1_counts)
+
+histogram1 <- ggplot(gene1_df, aes(x=Expression)) +
+geom_histogram(binwidth=250, fill="pink", color="black") +
+theme_minimal()+
+labs(title = paste("Histogram of Counts for", gene1),
+x = "Count Value",
+y = "Frequency"
+)
+
+histogram1
+
+```
+
+
+```{r}
+# Scatter Plot of Gene 1 vs Gene 2
+## choose a second gene
+gene2 <- "ENSG00000000460.17"
+
+
+## Extract counts for both genes
+gene2_counts <- as.numeric(counts[gene2, ])
+
+## Summary stats for gene2
+summary(gene2_counts)
+mean(gene2_counts)
+median(gene2_counts)
+sd(gene2_counts)
+min(gene2_counts)
+max(gene2_counts)
+
+scatterplot_df <- data.frame(
+Gene1 = gene1_counts,
+Gene2 = gene2_counts
+)
+
+## Fit linear model
+model3 <- lm(Gene2 ~ Gene1, data = scatterplot_df)
+
+## Extract coefficients
+coefficients <- coef(model3)
+intercept <- coefficients[1]
+slope <- coefficients[2]
+
+## Equation label text
+equa_label <- paste0("y = ", round(slope, 2), "x + ", round(intercept, 2))
+
+scatterplot2 <- ggplot(scatterplot_df, aes(x=Gene1, y=Gene2)) +
+geom_point(color = "red", alpha=0.8) +
+geom_smooth(method = "lm", se=TRUE, color="blue") +
+labs(title=paste("Scatter Plot of", gene1, "vs", gene2),
+x = paste("Counts for", gene1),
+y = paste("Counts for", gene2) 
+) +
+  annotate("text", x = Inf, y = -Inf, label = equa_label, hjust = 1.1, vjust = -1.1, size = 5, color = "red") +
+  theme_minimal()
+
+scatterplot2
+
+```
+
+
+```{r}
+# Violin Plot with Metadata
+library(stringr)
+
+## Merge Gene 1 expression with metadata
+metadata$SampleID <- rownames(metadata)
+
+gene1_metadata <- data.frame(
+SampleID = rownames(metadata),
+Expression = gene1_counts
+)
+
+gene1_metadata <- merge(gene1_metadata, metadata, by="SampleID", all.x = TRUE)
+
+## Filter out NA and AI/AN groups
+gene1_metadata_drop <- gene1_metadata %>%
+  filter(!is.na(race) & race != "american indian or alaska native")
+
+## Capitalize race categories
+gene1_metadata_drop$race <- factor(gene1_metadata_drop$race,
+                              levels = unique(gene1_metadata_drop$race),
+                              labels = str_to_title(unique(gene1_metadata_drop$race)))
+
+head(gene1_metadata_drop)
+
+## Using covariate: Race
+
+violin3 <- ggplot(gene1_metadata_drop, aes(x=race, y=Expression, fill=race)) +
+geom_violin(trim=FALSE) +
+geom_jitter(width=0.3, alpha=0.6, size=0.5) +
+theme_minimal() +
+labs(
+title = paste("Violin Plot of", gene1, "Expression by Race"),
+x = "Race",
+y = "Expression Counts",
+fill = "Race" # Change legend title
+) +
+theme(axis.text.x = element_text(angle=45,hjust=1))
+
+violin3
+
+```
+
+
+```{r}
+# Heatmap Analysis
+library(ComplexHeatmap)
+library(circlize)
+
+## Read in count matrix and metadata
+counts <- read.csv(paste0(file_path, "counts.csv"), row.names=1)
+metadata <- read.csv(paste0(file_path, "meta_data.csv"), row.names=1)
+print(head(metadata))
+
+## Selecting and keep 10 genes
+genes_to_plot <- rownames(counts)[1:10]
+counts_subset <- counts[genes_to_plot, ]
+
+## Heatmap annotations
+unique(metadata$specimen_type)
+
+column_hm <- HeatmapAnnotation(
+Gender = metadata$gender,
+Specimen_type = metadata$specimen_type,
+col = list(
+Gender = c(male = "green", female = "purple"),
+Specimen_type = c("Solid Tissue" = "blue", "Unknown" = "red")
+)
+)
+
+## Create heatmap
+ht4 <- Heatmap(
+counts_subset,
+name="Counts",
+top_annotation = column_hm,
+show_row_names = TRUE,
+show_column_names = FALSE, # Hide sample IDs
+cluster_columns = TRUE,
+cluster_rows = TRUE,
+column_title = "Samples",
+row_title = "Genes",
+heatmap_legend_param = list(title = "Count"),
+column_names_gp = gpar(fontsize = 8)
+)
+
+# Draw with combined legends on the right in one column
+ht4_1 <- draw(
+  ht4,
+  merge_legend = TRUE, # Combine all legends
+  heatmap_legend_side = "right", # Position of heatmap legend
+  annotation_legend_side = "right", # Position of annotation legends
+  legend_gap = unit(5, "mm") # Space between legend items
+)
+
+ht4_1
+
+```
+
+
+```{r}
+# Box plot for gender vs. age_at_index
+library(ggplot2)
+library(harrypotter)
+library(dplyr)
+library(stringr)
+
+## Remove NA values
+metadata_clean <- metadata %>%
+  filter(!is.na(gender) & !is.na(age_at_index))
+
+## Capitalize axis labels and legend title
+metadata_clean$gender <- str_to_title(metadata_clean$gender)
+
+## Boxplot
+boxplot5 <- ggplot(metadata_clean, aes(x = gender, y = age_at_index, fill = gender)) +
+  geom_boxplot(alpha = 0.7,
+               color = "black",
+               outlier.color = "red",
+               outlier.shape = 16,
+               width = 0.5
+               ) +
+  scale_fill_hp_d(option = "ronweasley") +
+  labs(title = "Age at Index by Gender",
+       x = "Gender",
+       y = "Age at Index (Years)"
+  ) +
+  theme_minimal()+
+  theme( plot.title = element_text(hjust = 0.5, face = "bold"),
+         axis.title = element_text(face = "bold"),
+         legend.position = "none",
+         panel.grid.minor = element_blank(),
+         axis.text.x = element_text(hjust = 1)
+        )
+
+boxplot5
+
+```
+
+```{r}
+# Save figures
+png("/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/histogram1.png", width = 2000, height = 1500, res = 300)
+print(histogram1)
+dev.off()
+
+png("/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/scatterplot2.png", width = 2000, height = 1500, res = 300)
+print(scatterplot2)
+dev.off()
+
+png("/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/violin3.png", width = 2000, height = 1500, res = 300)
+print(violin3)
+dev.off()
+
+
+png("/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/ht4.png", width = 2000, height = 1500, res = 300)
+print(ht4_1)
+dev.off()
+
+png("/Users/nguye/OneDrive/HSE711 Foundations in Data Science/Final Project/boxplot5.png", width = 2000, height = 1500, res = 300)
+print(boxplot5)
+dev.off()
+
+
+
+```
+```{r}
+packageVersion("ggplot2")
+packageVersion("dplyr")
+packageVersion("stringr")
+packageVersion("ComplexHeatmap")
+packageVersion("circlize")
+packageVersion("harrypotter")
+```
